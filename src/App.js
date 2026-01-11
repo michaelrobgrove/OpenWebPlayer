@@ -1,0 +1,438 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, Tv, Settings, Play, X, ChevronRight, Info } from 'lucide-react';
+
+const OpenWebPlayer = () => {
+  const [loginType, setLoginType] = useState(null);
+  const [m3uUrl, setM3uUrl] = useState('');
+  const [xtreamUrl, setXtreamUrl] = useState('');
+  const [xtreamUser, setXtreamUser] = useState('');
+  const [xtreamPass, setXtreamPass] = useState('');
+  const [channels, setChannels] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentChannel, setCurrentChannel] = useState(null);
+  const [epgData, setEpgData] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem('iptv_session');
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        if (data.type === 'm3u') {
+          setLoginType('m3u');
+          setM3uUrl(data.url);
+          loadM3U(data.url);
+        } else if (data.type === 'xtream') {
+          setLoginType('xtream');
+          setXtreamUrl(data.url);
+          setXtreamUser(data.user);
+          setXtreamPass(data.pass);
+          loadXtream(data.url, data.user, data.pass);
+        }
+      } catch (e) {
+        console.error('Failed to restore session', e);
+      }
+    }
+  }, []);
+
+  const parseM3U = (content) => {
+    const lines = content.split('\n');
+    const parsed = [];
+    let current = {};
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      if (line.startsWith('#EXTINF:')) {
+        const tvgId = line.match(/tvg-id="([^"]*)"/)?.[1] || '';
+        const tvgName = line.match(/tvg-name="([^"]*)"/)?.[1] || '';
+        const tvgLogo = line.match(/tvg-logo="([^"]*)"/)?.[1] || '';
+        const groupTitle = line.match(/group-title="([^"]*)"/)?.[1] || 'Uncategorized';
+        const nameMatch = line.split(',');
+        const name = nameMatch[nameMatch.length - 1].trim();
+
+        current = {
+          id: tvgId || `ch_${parsed.length}`,
+          name: tvgName || name,
+          logo: tvgLogo,
+          category: groupTitle,
+          epgId: tvgId
+        };
+      } else if (line && !line.startsWith('#') && current.name) {
+        current.url = line;
+        parsed.push({ ...current });
+        current = {};
+      }
+    }
+
+    return parsed;
+  };
+
+  const loadM3U = async (url) => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch(url);
+      const content = await response.text();
+      const parsed = parseM3U(content);
+      
+      setChannels(parsed);
+      const cats = [...new Set(parsed.map(ch => ch.category))].sort();
+      setCategories(cats);
+      
+      sessionStorage.setItem('iptv_session', JSON.stringify({ type: 'm3u', url }));
+      setLoginType('m3u');
+      
+      const epgUrl = content.match(/url-tvg="([^"]*)"/)?.[1];
+      if (epgUrl) {
+        loadEPG(epgUrl);
+      }
+    } catch (e) {
+      setError('Failed to load M3U playlist: ' + e.message);
+    }
+    setLoading(false);
+  };
+
+  const loadXtream = async (url, user, pass) => {
+    setLoading(true);
+    setError('');
+    try {
+      const baseUrl = url.replace(/\/$/, '');
+      const catResponse = await fetch(`${baseUrl}/player_api.php?username=${user}&password=${pass}&action=get_live_categories`);
+      const categories = await catResponse.json();
+      
+      const chResponse = await fetch(`${baseUrl}/player_api.php?username=${user}&password=${pass}&action=get_live_streams`);
+      const streams = await chResponse.json();
+      
+      const parsed = streams.map(ch => ({
+        id: ch.stream_id,
+        name: ch.name,
+        logo: ch.stream_icon,
+        category: categories.find(c => c.category_id === ch.category_id)?.category_name || 'Uncategorized',
+        url: `${baseUrl}/live/${user}/${pass}/${ch.stream_id}.m3u8`,
+        epgId: ch.epg_channel_id
+      }));
+      
+      setChannels(parsed);
+      const cats = [...new Set(parsed.map(ch => ch.category))].sort();
+      setCategories(cats);
+      
+      sessionStorage.setItem('iptv_session', JSON.stringify({ type: 'xtream', url, user, pass }));
+      setLoginType('xtream');
+      
+      const epgResponse = await fetch(`${baseUrl}/player_api.php?username=${user}&password=${pass}&action=get_simple_data_table&stream_id=${parsed[0]?.id}`);
+      const epg = await epgResponse.json();
+      if (epg.epg_listings) {
+        processXtreamEPG(epg.epg_listings);
+      }
+    } catch (e) {
+      setError('Failed to connect to Xtream Codes: ' + e.message);
+    }
+    setLoading(false);
+  };
+
+  const loadEPG = async (url) => {
+    try {
+      const response = await fetch(url);
+      const xml = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xml, 'text/xml');
+      const programmes = doc.querySelectorAll('programme');
+      const epg = {};
+      
+      programmes.forEach(prog => {
+        const channel = prog.getAttribute('channel');
+        const start = prog.getAttribute('start');
+        const title = prog.querySelector('title')?.textContent || '';
+        const desc = prog.querySelector('desc')?.textContent || '';
+        
+        if (!epg[channel]) epg[channel] = [];
+        epg[channel].push({ start, title, desc });
+      });
+      
+      setEpgData(epg);
+    } catch (e) {
+      console.error('EPG load failed', e);
+    }
+  };
+
+  const processXtreamEPG = (listings) => {
+    const epg = {};
+    Object.keys(listings).forEach(channelId => {
+      epg[channelId] = listings[channelId].map(item => ({
+        start: item.start,
+        title: item.title,
+        desc: item.description
+      }));
+    });
+    setEpgData(epg);
+  };
+
+  const handleM3UConnect = () => {
+    if (m3uUrl) {
+      loadM3U(m3uUrl);
+    }
+  };
+
+  const handleXtreamConnect = () => {
+    if (xtreamUrl && xtreamUser && xtreamPass) {
+      loadXtream(xtreamUrl, xtreamUser, xtreamPass);
+    }
+  };
+
+  const playChannel = (channel) => {
+    setCurrentChannel(channel);
+    if (videoRef.current) {
+      videoRef.current.src = channel.url;
+      videoRef.current.load();
+      videoRef.current.play().catch(e => console.error('Play failed', e));
+    }
+  };
+
+  const logout = () => {
+    sessionStorage.removeItem('iptv_session');
+    setLoginType(null);
+    setChannels([]);
+    setCategories([]);
+    setCurrentChannel(null);
+    setM3uUrl('');
+    setXtreamUrl('');
+    setXtreamUser('');
+    setXtreamPass('');
+  };
+
+  const filteredChannels = channels.filter(ch => {
+    const matchesCategory = selectedCategory === 'all' || ch.category === selectedCategory;
+    const matchesSearch = ch.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
+
+  const getCurrentEPG = (channel) => {
+    if (!channel?.epgId || !epgData[channel.epgId]) return null;
+    const now = new Date();
+    return epgData[channel.epgId].find(prog => {
+      const start = new Date(prog.start);
+      return start <= now;
+    });
+  };
+
+  if (!loginType) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-800 rounded-lg shadow-2xl p-8">
+          <div className="flex items-center justify-center mb-8">
+            <Tv className="w-12 h-12 text-blue-500 mr-3" />
+            <h1 className="text-3xl font-bold text-white">OpenWebPlayer</h1>
+          </div>
+          
+          <div className="space-y-4">
+            <button
+              onClick={() => setShowSettings('m3u')}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg transition flex items-center justify-between"
+            >
+              <span>Login with M3U URL</span>
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            
+            <button
+              onClick={() => setShowSettings('xtream')}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg transition flex items-center justify-between"
+            >
+              <span>Login with Xtream Codes</span>
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+
+          {showSettings === 'm3u' && (
+            <div className="mt-6 space-y-4">
+              <input
+                type="url"
+                value={m3uUrl}
+                onChange={(e) => setM3uUrl(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleM3UConnect()}
+                placeholder="Enter M3U URL"
+                className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              <button
+                onClick={handleM3UConnect}
+                disabled={loading || !m3uUrl}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition disabled:opacity-50"
+              >
+                {loading ? 'Loading...' : 'Connect'}
+              </button>
+            </div>
+          )}
+
+          {showSettings === 'xtream' && (
+            <div className="mt-6 space-y-4">
+              <input
+                type="url"
+                value={xtreamUrl}
+                onChange={(e) => setXtreamUrl(e.target.value)}
+                placeholder="Server URL"
+                className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+              />
+              <input
+                type="text"
+                value={xtreamUser}
+                onChange={(e) => setXtreamUser(e.target.value)}
+                placeholder="Username"
+                className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+              />
+              <input
+                type="password"
+                value={xtreamPass}
+                onChange={(e) => setXtreamPass(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleXtreamConnect()}
+                placeholder="Password"
+                className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+              />
+              <button
+                onClick={handleXtreamConnect}
+                disabled={loading || !xtreamUrl || !xtreamUser || !xtreamPass}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition disabled:opacity-50"
+              >
+                {loading ? 'Connecting...' : 'Connect'}
+              </button>
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-4 bg-red-500 bg-opacity-20 border border-red-500 text-red-200 px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          )}
+
+          <div className="mt-6 text-center text-slate-400 text-sm">
+            <Info className="w-4 h-4 inline mr-1" />
+            Your credentials are stored only in your browser session
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-white">
+      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Tv className="w-8 h-8 text-blue-500" />
+          <h1 className="text-xl font-bold">OpenWebPlayer</h1>
+        </div>
+        <button
+          onClick={logout}
+          className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition text-sm"
+        >
+          Logout
+        </button>
+      </header>
+
+      <div className="flex h-[calc(100vh-60px)]">
+        <aside className="w-80 bg-slate-800 border-r border-slate-700 flex flex-col">
+          <div className="p-4 space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search channels..."
+                className="w-full bg-slate-700 text-white pl-10 pr-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="all">All Categories</option>
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {filteredChannels.map(channel => (
+              <button
+                key={channel.id}
+                onClick={() => playChannel(channel)}
+                className={`w-full p-3 border-b border-slate-700 hover:bg-slate-700 transition text-left flex items-center space-x-3 ${
+                  currentChannel?.id === channel.id ? 'bg-slate-700' : ''
+                }`}
+              >
+                {channel.logo ? (
+                  <img src={channel.logo} alt="" className="w-10 h-10 rounded object-cover" />
+                ) : (
+                  <div className="w-10 h-10 bg-slate-600 rounded flex items-center justify-center">
+                    <Tv className="w-5 h-5 text-slate-400" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{channel.name}</div>
+                  <div className="text-xs text-slate-400 truncate">{channel.category}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <main className="flex-1 flex flex-col bg-black">
+          {currentChannel ? (
+            <>
+              <div className="flex-1 flex items-center justify-center bg-black">
+                <video
+                  ref={videoRef}
+                  controls
+                  className="w-full h-full"
+                  autoPlay
+                >
+                  Your browser does not support video playback.
+                </video>
+              </div>
+              
+              <div className="bg-slate-800 px-6 py-4 border-t border-slate-700">
+                <div className="flex items-start space-x-4">
+                  {currentChannel.logo && (
+                    <img src={currentChannel.logo} alt="" className="w-16 h-16 rounded object-cover" />
+                  )}
+                  <div className="flex-1">
+                    <h2 className="text-xl font-bold">{currentChannel.name}</h2>
+                    <p className="text-slate-400 text-sm">{currentChannel.category}</p>
+                    {getCurrentEPG(currentChannel) && (
+                      <div className="mt-2 text-sm">
+                        <div className="font-semibold text-blue-400">
+                          {getCurrentEPG(currentChannel).title}
+                        </div>
+                        {getCurrentEPG(currentChannel).desc && (
+                          <div className="text-slate-400 mt-1">
+                            {getCurrentEPG(currentChannel).desc}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-slate-400">
+              <div className="text-center">
+                <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <p>Select a channel to start watching</p>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default OpenWebPlayer;
