@@ -29,27 +29,76 @@ A lightweight, privacy-focused IPTV web player that runs entirely in your browse
 - **Session Storage**: Browser-based temporary credential storage
 - **No Backend Required**: Runs entirely client-side
 
+## 🚀 Quick Setup Guide
+
+### Project Structure
+
+Your repository should have this structure:
+```
+OpenWebPlayer/
+├── public/
+│   └── index.html
+├── src/
+│   ├── App.js
+│   ├── App.css
+│   ├── index.js
+│   └── index.css
+├── package.json
+└── README.md
+```
+
+### Setup Steps
+
+1. **Create the files** in your GitHub repository with the exact structure above
+2. Copy the contents from each artifact into the corresponding file
+3. Commit all files to your repository
+
 ## 🚀 Deployment Options
 
 ### Option 1: Cloudflare Pages (Recommended)
 
-1. **Fork this Repository**
-   - Click "Fork" on GitHub to create your own copy
+#### Step-by-Step Instructions:
 
-2. **Connect to Cloudflare Pages**
-   - Log in to [Cloudflare Dashboard](https://dash.cloudflare.com)
-   - Go to "Workers & Pages" → "Create Application" → "Pages"
-   - Connect your GitHub account
-   - Select your forked repository
+1. **Prepare Your Repository**
+   - Make sure all files are committed to your GitHub repository
+   - Your repo should have the structure shown above
 
-3. **Configure Build Settings**
-   - Framework preset: `Create React App` or `React`
-   - Build command: `npm run build`
-   - Build output directory: `build`
+2. **Log in to Cloudflare**
+   - Go to [Cloudflare Dashboard](https://dash.cloudflare.com)
+   - Sign up for a free account if you don't have one
 
-4. **Deploy**
+3. **Create a New Pages Project**
+   - Click on "Workers & Pages" in the left sidebar
+   - Click "Create Application"
+   - Select the "Pages" tab
+   - Click "Connect to Git"
+
+4. **Connect Your GitHub Repository**
+   - Click "Connect GitHub" or "Connect GitLab"
+   - Authorize Cloudflare to access your repositories
+   - Select your OpenWebPlayer repository
+   - Click "Begin Setup"
+
+5. **Configure Build Settings**
+   - **Project name**: openwebplayer (or your choice)
+   - **Production branch**: main
+   - **Framework preset**: Create React App
+   - **Build command**: `npm run build`
+   - **Build output directory**: `build`
+   - Leave environment variables empty
+
+6. **Deploy**
    - Click "Save and Deploy"
-   - Your player will be live at `your-project.pages.dev`
+   - Wait 2-3 minutes for the build to complete
+   - Your player will be live at `openwebplayer.pages.dev` (or your chosen name)
+
+#### Troubleshooting Cloudflare Pages:
+
+If the build fails:
+- Make sure `package.json` is in the root directory
+- Verify all files are committed to GitHub
+- Check that the build command is exactly `npm run build`
+- Check that the build output directory is exactly `build`
 
 ### Option 2: Self-Hosting
 
