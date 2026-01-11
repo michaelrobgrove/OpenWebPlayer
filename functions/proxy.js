@@ -1,96 +1,54 @@
-// Cloudflare Pages Function to proxy IPTV requests
-// This bypasses CORS restrictions and handles HTTP/HTTPS issues
-
+// functions/proxy.js
 export async function onRequest(context) {
   const { request } = context;
+  const url = new URL(request.url);
   
-  // Only allow POST requests with JSON body
-  if (request.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+  // 1. Determine the target URL
+  let targetUrl;
+  
+  if (request.method === 'POST') {
+    // Handle JSON body for API requests
+    try {
+      const body = await request.json();
+      targetUrl = body.url;
+    } catch (e) {
+      return new Response('Invalid JSON body', { status: 400 });
+    }
+  } else if (request.method === 'GET') {
+    // Handle Query Parameter for Streaming (e.g., /proxy?url=http://...)
+    targetUrl = url.searchParams.get('url');
   }
 
+  if (!targetUrl) {
+    return new Response('Missing "url" parameter', { status: 400 });
+  }
+
+  // 2. Fetch the upstream content
+  // We strictly pass the original headers to look like a browser or player
   try {
-    const { url, method = 'GET', headers = {} } = await request.json();
-    
-    if (!url) {
-      return new Response(JSON.stringify({ error: 'URL is required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Validate URL to prevent abuse
-    const urlObj = new URL(url);
-    const allowedPaths = ['/player_api.php', '.m3u', '.m3u8', '.xml'];
-    const isAllowed = allowedPaths.some(path => 
-      urlObj.pathname.includes(path) || urlObj.pathname.endsWith(path)
-    );
-
-    if (!isAllowed) {
-      return new Response(JSON.stringify({ error: 'URL not allowed for proxying' }), {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Make the proxied request
-    const proxiedResponse = await fetch(url, {
-      method,
+    const response = await fetch(targetUrl, {
+      method: request.method,
       headers: {
-        'User-Agent': 'OpenWebPlayer/1.0',
-        ...headers
+        'User-Agent': request.headers.get('User-Agent') || 'OpenWebPlayer/1.0',
+        'Accept': request.headers.get('Accept') || '*/*',
       }
     });
 
-    // Get response body
-    const contentType = proxiedResponse.headers.get('content-type') || '';
-    let body;
-    
-    if (contentType.includes('application/json')) {
-      body = await proxiedResponse.json();
-    } else {
-      body = await proxiedResponse.text();
-    }
+    // 3. Prepare the response headers
+    // We filter out headers that might cause issues and add CORS
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Access-Control-Allow-Origin', '*');
+    newHeaders.delete('Content-Encoding'); // Let Cloudflare handle compression
+    newHeaders.delete('Content-Length');   // Chunked transfer for streams
 
-    // Return with CORS headers
-    return new Response(JSON.stringify({
-      status: proxiedResponse.status,
-      statusText: proxiedResponse.statusText,
-      headers: Object.fromEntries(proxiedResponse.headers),
-      body,
-      contentType
-    }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
+    // 4. Return the stream directly
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
     });
 
-  } catch (error) {
-    return new Response(JSON.stringify({ 
-      error: error.message,
-      stack: error.stack 
-    }), {
-      status: 500,
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
-    });
+  } catch (err) {
+    return new Response(`Proxy Error: ${err.message}`, { status: 500 });
   }
-}
-
-// Handle OPTIONS requests for CORS preflight
-export async function onRequestOptions() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    }
-  });
 }

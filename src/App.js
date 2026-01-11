@@ -238,7 +238,11 @@ const OpenWebPlayer = () => {
   const playChannel = (channel) => {
     setCurrentChannel(channel);
     if (videoRef.current) {
-      videoRef.current.src = channel.url;
+      // MODIFIED: Route stream through proxy to fix Mixed Content (HTTP on HTTPS)
+      // This corresponds to the updated functions/proxy.js logic
+      const proxyStreamUrl = `/proxy?url=${encodeURIComponent(channel.url)}`;
+      
+      videoRef.current.src = proxyStreamUrl;
       videoRef.current.load();
       videoRef.current.play().catch(e => console.error('Play failed', e));
     }
