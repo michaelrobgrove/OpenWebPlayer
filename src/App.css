@@ -165,6 +165,23 @@ body {
   height: 1rem;
 }
 
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-yellow-400 {
+  color: #facc15;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
 .app-container {
   min-height: 100vh;
   background-color: #0f172a;
