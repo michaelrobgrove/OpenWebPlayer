@@ -39,6 +39,7 @@ const OpenWebPlayer = () => {
         console.error('Failed to restore session', e);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const parseM3U = (content) => {
