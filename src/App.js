@@ -47,6 +47,7 @@ const OpenWebPlayer = () => {
     try {
       // First, try direct fetch
       const response = await fetch(url, options);
+      if (!response.ok && response.status === 0) throw new Error("CORS or Network Error");
       return response;
     } catch (error) {
       // If direct fetch fails, use CF proxy
@@ -58,6 +59,7 @@ const OpenWebPlayer = () => {
   // Proxy fetch through Cloudflare Worker
   const proxyFetch = async (url, options = {}) => {
     const proxyUrl = '/proxy';
+    // Use POST to send the target URL in the body for API calls
     const response = await fetch(proxyUrl, {
       method: 'POST',
       headers: {
@@ -72,11 +74,12 @@ const OpenWebPlayer = () => {
 
     const data = await response.json();
     
+    // If the proxy returns a direct error object
     if (data.error) {
       throw new Error(data.error);
     }
 
-    // Create a mock Response object
+    // Create a mock Response object so the rest of the app treats it like a normal fetch
     return {
       ok: data.status >= 200 && data.status < 300,
       status: data.status,
@@ -174,10 +177,15 @@ const OpenWebPlayer = () => {
       setLoginType('xtream');
       
       if (parsed.length > 0) {
-        const epgResponse = await smartFetch(`${baseUrl}/player_api.php?username=${user}&password=${pass}&action=get_simple_data_table&stream_id=${parsed[0]?.id}`);
-        const epg = await epgResponse.json();
-        if (epg.epg_listings) {
-          processXtreamEPG(epg.epg_listings);
+        // Try to load EPG for the first channel to verify
+        try {
+            const epgResponse = await smartFetch(`${baseUrl}/player_api.php?username=${user}&password=${pass}&action=get_simple_data_table&stream_id=${parsed[0]?.id}`);
+            const epg = await epgResponse.json();
+            if (epg.epg_listings) {
+              processXtreamEPG(epg.epg_listings);
+            }
+        } catch (epgErr) {
+            console.log("EPG load failed (non-critical)", epgErr);
         }
       }
     } catch (e) {
@@ -238,8 +246,8 @@ const OpenWebPlayer = () => {
   const playChannel = (channel) => {
     setCurrentChannel(channel);
     if (videoRef.current) {
-      // MODIFIED: Route stream through proxy to fix Mixed Content (HTTP on HTTPS)
-      // This corresponds to the updated functions/proxy.js logic
+      // FIX: Route stream through proxy to fix Mixed Content (HTTP on HTTPS)
+      // We encode the URL to safely pass it as a query parameter
       const proxyStreamUrl = `/proxy?url=${encodeURIComponent(channel.url)}`;
       
       videoRef.current.src = proxyStreamUrl;
@@ -365,10 +373,6 @@ const OpenWebPlayer = () => {
           <div className="privacy-notice">
             <Info className="info-icon" />
             Your credentials are stored only in your browser session
-          </div>
-          
-          <div className="mt-4 text-center text-green-400 text-xs">
-            ✅ Auto-proxy enabled: Works with HTTP and CORS-restricted providers
           </div>
         </div>
       </div>
