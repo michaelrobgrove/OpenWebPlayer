@@ -10,6 +10,24 @@ A lightweight, privacy-focused IPTV web player that runs entirely in your browse
 - Only accessible to you on your device
 - Not stored permanently anywhere
 
+## ⚠️ Provider Compatibility
+
+**Important**: Not all IPTV providers work in web browsers due to technical restrictions.
+
+### ✅ What Works:
+- M3U playlist URLs (recommended)
+- HTTPS-enabled Xtream Codes providers
+- Providers that support browser access (CORS-enabled)
+
+### ❌ What Doesn't Work:
+- HTTP-only providers (blocked by browser security)
+- CORS-restricted providers (most traditional IPTV services)
+- Providers designed only for native apps
+
+**Troubleshooting**: If you get connection errors, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed solutions.
+
+**Recommendation**: If your provider doesn't work, ask them for an M3U playlist URL or HTTPS server address.
+
 ## ✨ Features
 
 - **Dual Login Support**: Connect via M3U URL or Xtream Codes
