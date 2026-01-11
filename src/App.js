@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Tv, Settings, Play, X, ChevronRight, Info } from 'lucide-react';
+import { Search, Tv, Play, ChevronRight, Info } from 'lucide-react';
+import './App.css';
 
 const OpenWebPlayer = () => {
   const [loginType, setLoginType] = useState(null);
@@ -125,10 +126,12 @@ const OpenWebPlayer = () => {
       sessionStorage.setItem('iptv_session', JSON.stringify({ type: 'xtream', url, user, pass }));
       setLoginType('xtream');
       
-      const epgResponse = await fetch(`${baseUrl}/player_api.php?username=${user}&password=${pass}&action=get_simple_data_table&stream_id=${parsed[0]?.id}`);
-      const epg = await epgResponse.json();
-      if (epg.epg_listings) {
-        processXtreamEPG(epg.epg_listings);
+      if (parsed.length > 0) {
+        const epgResponse = await fetch(`${baseUrl}/player_api.php?username=${user}&password=${pass}&action=get_simple_data_table&stream_id=${parsed[0]?.id}`);
+        const epg = await epgResponse.json();
+        if (epg.epg_listings) {
+          processXtreamEPG(epg.epg_listings);
+        }
       }
     } catch (e) {
       setError('Failed to connect to Xtream Codes: ' + e.message);
@@ -223,45 +226,45 @@ const OpenWebPlayer = () => {
 
   if (!loginType) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-slate-800 rounded-lg shadow-2xl p-8">
-          <div className="flex items-center justify-center mb-8">
-            <Tv className="w-12 h-12 text-blue-500 mr-3" />
-            <h1 className="text-3xl font-bold text-white">OpenWebPlayer</h1>
+      <div className="login-container">
+        <div className="login-card">
+          <div className="logo-header">
+            <Tv className="logo-icon" />
+            <h1 className="logo-text">OpenWebPlayer</h1>
           </div>
           
-          <div className="space-y-4">
+          <div className="button-group">
             <button
               onClick={() => setShowSettings('m3u')}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg transition flex items-center justify-between"
+              className="login-button m3u-button"
             >
               <span>Login with M3U URL</span>
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="chevron-icon" />
             </button>
             
             <button
               onClick={() => setShowSettings('xtream')}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg transition flex items-center justify-between"
+              className="login-button xtream-button"
             >
               <span>Login with Xtream Codes</span>
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="chevron-icon" />
             </button>
           </div>
 
           {showSettings === 'm3u' && (
-            <div className="mt-6 space-y-4">
+            <div className="settings-form">
               <input
                 type="url"
                 value={m3uUrl}
                 onChange={(e) => setM3uUrl(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleM3UConnect()}
                 placeholder="Enter M3U URL"
-                className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="input-field"
               />
               <button
                 onClick={handleM3UConnect}
                 disabled={loading || !m3uUrl}
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition disabled:opacity-50"
+                className="connect-button"
               >
                 {loading ? 'Loading...' : 'Connect'}
               </button>
@@ -269,20 +272,20 @@ const OpenWebPlayer = () => {
           )}
 
           {showSettings === 'xtream' && (
-            <div className="mt-6 space-y-4">
+            <div className="settings-form">
               <input
                 type="url"
                 value={xtreamUrl}
                 onChange={(e) => setXtreamUrl(e.target.value)}
                 placeholder="Server URL"
-                className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                className="input-field"
               />
               <input
                 type="text"
                 value={xtreamUser}
                 onChange={(e) => setXtreamUser(e.target.value)}
                 placeholder="Username"
-                className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                className="input-field"
               />
               <input
                 type="password"
@@ -290,12 +293,12 @@ const OpenWebPlayer = () => {
                 onChange={(e) => setXtreamPass(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleXtreamConnect()}
                 placeholder="Password"
-                className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                className="input-field"
               />
               <button
                 onClick={handleXtreamConnect}
                 disabled={loading || !xtreamUrl || !xtreamUser || !xtreamPass}
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition disabled:opacity-50"
+                className="connect-button"
               >
                 {loading ? 'Connecting...' : 'Connect'}
               </button>
@@ -303,13 +306,13 @@ const OpenWebPlayer = () => {
           )}
 
           {error && (
-            <div className="mt-4 bg-red-500 bg-opacity-20 border border-red-500 text-red-200 px-4 py-3 rounded-lg">
+            <div className="error-message">
               {error}
             </div>
           )}
 
-          <div className="mt-6 text-center text-slate-400 text-sm">
-            <Info className="w-4 h-4 inline mr-1" />
+          <div className="privacy-notice">
+            <Info className="info-icon" />
             Your credentials are stored only in your browser session
           </div>
         </div>
@@ -318,38 +321,35 @@ const OpenWebPlayer = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Tv className="w-8 h-8 text-blue-500" />
-          <h1 className="text-xl font-bold">OpenWebPlayer</h1>
+    <div className="app-container">
+      <header className="app-header">
+        <div className="header-left">
+          <Tv className="header-icon" />
+          <h1 className="header-title">OpenWebPlayer</h1>
         </div>
-        <button
-          onClick={logout}
-          className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition text-sm"
-        >
+        <button onClick={logout} className="logout-button">
           Logout
         </button>
       </header>
 
-      <div className="flex h-[calc(100vh-60px)]">
-        <aside className="w-80 bg-slate-800 border-r border-slate-700 flex flex-col">
-          <div className="p-4 space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+      <div className="main-content">
+        <aside className="sidebar">
+          <div className="sidebar-controls">
+            <div className="search-container">
+              <Search className="search-icon" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search channels..."
-                className="w-full bg-slate-700 text-white pl-10 pr-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="search-input"
               />
             </div>
 
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              className="category-select"
             >
               <option value="all">All Categories</option>
               {categories.map(cat => (
@@ -358,60 +358,58 @@ const OpenWebPlayer = () => {
             </select>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="channel-list">
             {filteredChannels.map(channel => (
               <button
                 key={channel.id}
                 onClick={() => playChannel(channel)}
-                className={`w-full p-3 border-b border-slate-700 hover:bg-slate-700 transition text-left flex items-center space-x-3 ${
-                  currentChannel?.id === channel.id ? 'bg-slate-700' : ''
-                }`}
+                className={`channel-item ${currentChannel?.id === channel.id ? 'active' : ''}`}
               >
                 {channel.logo ? (
-                  <img src={channel.logo} alt="" className="w-10 h-10 rounded object-cover" />
+                  <img src={channel.logo} alt="" className="channel-logo" />
                 ) : (
-                  <div className="w-10 h-10 bg-slate-600 rounded flex items-center justify-center">
-                    <Tv className="w-5 h-5 text-slate-400" />
+                  <div className="channel-logo-placeholder">
+                    <Tv className="placeholder-icon" />
                   </div>
                 )}
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{channel.name}</div>
-                  <div className="text-xs text-slate-400 truncate">{channel.category}</div>
+                <div className="channel-info">
+                  <div className="channel-name">{channel.name}</div>
+                  <div className="channel-category">{channel.category}</div>
                 </div>
               </button>
             ))}
           </div>
         </aside>
 
-        <main className="flex-1 flex flex-col bg-black">
+        <main className="video-section">
           {currentChannel ? (
             <>
-              <div className="flex-1 flex items-center justify-center bg-black">
+              <div className="video-container">
                 <video
                   ref={videoRef}
                   controls
-                  className="w-full h-full"
+                  className="video-player"
                   autoPlay
                 >
                   Your browser does not support video playback.
                 </video>
               </div>
               
-              <div className="bg-slate-800 px-6 py-4 border-t border-slate-700">
-                <div className="flex items-start space-x-4">
+              <div className="now-playing">
+                <div className="now-playing-content">
                   {currentChannel.logo && (
-                    <img src={currentChannel.logo} alt="" className="w-16 h-16 rounded object-cover" />
+                    <img src={currentChannel.logo} alt="" className="now-playing-logo" />
                   )}
-                  <div className="flex-1">
-                    <h2 className="text-xl font-bold">{currentChannel.name}</h2>
-                    <p className="text-slate-400 text-sm">{currentChannel.category}</p>
+                  <div className="now-playing-info">
+                    <h2 className="now-playing-title">{currentChannel.name}</h2>
+                    <p className="now-playing-category">{currentChannel.category}</p>
                     {getCurrentEPG(currentChannel) && (
-                      <div className="mt-2 text-sm">
-                        <div className="font-semibold text-blue-400">
+                      <div className="epg-info">
+                        <div className="epg-title">
                           {getCurrentEPG(currentChannel).title}
                         </div>
                         {getCurrentEPG(currentChannel).desc && (
-                          <div className="text-slate-400 mt-1">
+                          <div className="epg-desc">
                             {getCurrentEPG(currentChannel).desc}
                           </div>
                         )}
@@ -422,11 +420,9 @@ const OpenWebPlayer = () => {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-slate-400">
-              <div className="text-center">
-                <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>Select a channel to start watching</p>
-              </div>
+            <div className="empty-state">
+              <Play className="empty-icon" />
+              <p>Select a channel to start watching</p>
             </div>
           )}
         </main>
