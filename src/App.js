@@ -42,6 +42,51 @@ const OpenWebPlayer = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Smart fetch function that auto-detects CORS issues and uses proxy
+  const smartFetch = async (url, options = {}) => {
+    try {
+      // First, try direct fetch
+      const response = await fetch(url, options);
+      return response;
+    } catch (error) {
+      // If direct fetch fails, use CF proxy
+      console.log('Direct fetch failed, using proxy:', error.message);
+      return await proxyFetch(url, options);
+    }
+  };
+
+  // Proxy fetch through Cloudflare Worker
+  const proxyFetch = async (url, options = {}) => {
+    const proxyUrl = '/proxy';
+    const response = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url,
+        method: options.method || 'GET',
+        headers: options.headers || {}
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    // Create a mock Response object
+    return {
+      ok: data.status >= 200 && data.status < 300,
+      status: data.status,
+      statusText: data.statusText,
+      headers: new Headers(data.headers),
+      json: async () => typeof data.body === 'string' ? JSON.parse(data.body) : data.body,
+      text: async () => typeof data.body === 'string' ? data.body : JSON.stringify(data.body)
+    };
+  };
+
   const parseM3U = (content) => {
     const lines = content.split('\n');
     const parsed = [];
