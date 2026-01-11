@@ -124,9 +124,7 @@ const OpenWebPlayer = () => {
     setLoading(true);
     setError('');
     try {
-      // Use CORS proxy for M3U URLs if needed
-      const fetchUrl = url.startsWith('http://') ? `https://corsproxy.io/?${encodeURIComponent(url)}` : url;
-      const response = await fetch(fetchUrl);
+      const response = await smartFetch(url);
       const content = await response.text();
       const parsed = parseM3U(content);
       
@@ -152,13 +150,11 @@ const OpenWebPlayer = () => {
     setError('');
     try {
       const baseUrl = url.replace(/\/$/, '');
-      // Ensure HTTPS for Xtream connections
-      const secureUrl = baseUrl.replace(/^http:/, 'https:');
       
-      const catResponse = await fetch(`${secureUrl}/player_api.php?username=${user}&password=${pass}&action=get_live_categories`);
+      const catResponse = await smartFetch(`${baseUrl}/player_api.php?username=${user}&password=${pass}&action=get_live_categories`);
       const categories = await catResponse.json();
       
-      const chResponse = await fetch(`${secureUrl}/player_api.php?username=${user}&password=${pass}&action=get_live_streams`);
+      const chResponse = await smartFetch(`${baseUrl}/player_api.php?username=${user}&password=${pass}&action=get_live_streams`);
       const streams = await chResponse.json();
       
       const parsed = streams.map(ch => ({
@@ -166,7 +162,7 @@ const OpenWebPlayer = () => {
         name: ch.name,
         logo: ch.stream_icon,
         category: categories.find(c => c.category_id === ch.category_id)?.category_name || 'Uncategorized',
-        url: `${secureUrl}/live/${user}/${pass}/${ch.stream_id}.m3u8`,
+        url: `${baseUrl}/live/${user}/${pass}/${ch.stream_id}.m3u8`,
         epgId: ch.epg_channel_id
       }));
       
@@ -174,25 +170,25 @@ const OpenWebPlayer = () => {
       const cats = [...new Set(parsed.map(ch => ch.category))].sort();
       setCategories(cats);
       
-      sessionStorage.setItem('iptv_session', JSON.stringify({ type: 'xtream', url: secureUrl, user, pass }));
+      sessionStorage.setItem('iptv_session', JSON.stringify({ type: 'xtream', url: baseUrl, user, pass }));
       setLoginType('xtream');
       
       if (parsed.length > 0) {
-        const epgResponse = await fetch(`${secureUrl}/player_api.php?username=${user}&password=${pass}&action=get_simple_data_table&stream_id=${parsed[0]?.id}`);
+        const epgResponse = await smartFetch(`${baseUrl}/player_api.php?username=${user}&password=${pass}&action=get_simple_data_table&stream_id=${parsed[0]?.id}`);
         const epg = await epgResponse.json();
         if (epg.epg_listings) {
           processXtreamEPG(epg.epg_listings);
         }
       }
     } catch (e) {
-      setError('Failed to connect to Xtream Codes: ' + e.message + '. Note: Your IPTV provider must support HTTPS and allow browser access (CORS). Many providers only work with native apps.');
+      setError('Failed to connect to Xtream Codes: ' + e.message);
     }
     setLoading(false);
   };
 
   const loadEPG = async (url) => {
     try {
-      const response = await fetch(url);
+      const response = await smartFetch(url);
       const xml = await response.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(xml, 'text/xml');
@@ -367,8 +363,8 @@ const OpenWebPlayer = () => {
             Your credentials are stored only in your browser session
           </div>
           
-          <div className="mt-4 text-center text-yellow-400 text-xs">
-            ⚠️ Note: Your IPTV provider must support HTTPS and browser access (CORS). Some providers only work with native apps.
+          <div className="mt-4 text-center text-green-400 text-xs">
+            ✅ Auto-proxy enabled: Works with HTTP and CORS-restricted providers
           </div>
         </div>
       </div>
